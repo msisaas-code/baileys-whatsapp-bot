@@ -16,43 +16,31 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
         auth: state,
         browser: ['RuralSoft Bot', 'Chrome', '1.0.0'],
-        printQRInTerminal: true, // Forzar QR en terminal
         logger: {
-            log: console.log,
-            info: console.log,
-            error: console.error
+            log: console.log.bind(console),
+            info: console.log.bind(console),
+            error: console.error.bind(console)
         }
     });
 
-    // ============================================================
-    //  FALLBACK: CÓDIGO DE EMPAREJAMIENTO
-    // ============================================================
-    setTimeout(async () => {
-        try {
-            console.log('📱 Solicitando código de emparejamiento...');
-            const code = await sock.requestPairingCode('5493718578911');
-            console.log('🔢 Código de 8 dígitos (si es numérico, úsalo):', code);
-        } catch (err) {
-            console.log('⚠️ No se pudo obtener código de emparejamiento:', err.message);
-        }
-    }, 3000);
-
-    // ============================================================
-    //  EVENTO DE CONEXIÓN – QR
-    // ============================================================
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
             console.log('📱 QR DETECTADO! Escanealo con WhatsApp:');
-            // Mostrar el QR en la terminal
+            // Mostrar el QR en terminal
             try {
-                const qrString = await QRCode.toString(qr, { type: 'terminal', small: true });
+                const qrString = await QRCode.toString(qr, { type: 'terminal' });
                 console.log(qrString);
             } catch (err) {
-                console.log('📱 Texto del QR (copiar y pegar en https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=):');
+                console.log('📱 Texto del QR (copiar y pegar en generador online):');
                 console.log(qr);
             }
+            // Guardar QR como archivo de imagen
+            QRCode.toFile('qr.png', qr, (err) => {
+                if (err) console.error('Error guardando QR:', err);
+                else console.log('📱 QR guardado como qr.png. Descargalo desde la pestaña "Files" de Railway.');
+            });
         }
 
         if (connection === 'close') {
@@ -106,6 +94,7 @@ connectToWhatsApp();
 
 app.get('/qr', async (req, res) => {
     try {
+        // Generar QR manualmente
         const qr = await sock.requestQR();
         res.send(`
             <html>
@@ -113,7 +102,7 @@ app.get('/qr', async (req, res) => {
                 <body style="text-align:center;font-family:Arial;padding-top:50px;">
                     <h1>📱 Escanea este QR con WhatsApp</h1>
                     <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}" />
-                    <p>O usá el código de emparejamiento (si es numérico).</p>
+                    <p>O usá el código de emparejamiento en los logs.</p>
                 </body>
             </html>
         `);
