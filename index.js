@@ -19,41 +19,55 @@ async function connectToWhatsApp() {
         browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
     });
 
+    // ============================================================
+    //  FALLBACK: CÓDIGO DE EMPAREJAMIENTO (8 dígitos)
+    //  Se usa cuando no hay QR o no se puede escanear.
+    // ============================================================
+    if (!state.creds) {
+        console.log('📱 No hay sesión guardada. Solicitando código de emparejamiento...');
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode('5493718578911'); // Número sin +
+                console.log('📱 Código de emparejamiento (8 dígitos):');
+                console.log(code);
+                console.log('📱 Usalo en WhatsApp → Dispositivos vinculados → Vincular con número de teléfono');
+            } catch (err) {
+                console.error('Error obteniendo código de emparejamiento:', err);
+            }
+        }, 3000); // Espera 3 segundos para que Baileys esté listo
+    }
+
     sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    
-    // Siempre mostrar algo para saber que el evento se ejecuta
-    console.log('🔄 Evento connection.update recibido');
-    
-    if (qr) {
-        console.log('📱 QR detectado!');
-        console.log('📱 Texto del QR (copiar y pegar en generador online):');
-        console.log(qr);
-        console.log('📱 Código QR (terminal):');
-        try {
-            const qrString = await QRCode.toString(qr, { type: 'terminal' });
-            console.log(qrString);
-        } catch (err) {
-            console.error('Error generando QR:', err);
+        const { connection, lastDisconnect, qr } = update;
+        
+        console.log('🔄 Evento connection.update recibido');
+        
+        if (qr) {
+            console.log('📱 QR detectado!');
+            console.log('📱 Texto del QR (copiar y pegar en generador online):');
+            console.log(qr);
+            console.log('📱 Código QR (terminal):');
+            try {
+                const qrString = await QRCode.toString(qr, { type: 'terminal' });
+                console.log(qrString);
+            } catch (err) {
+                console.error('Error generando QR:', err);
+            }
+            console.log('\n');
+        } else {
+            console.log('⏳ Esperando QR...');
         }
-        console.log('\n');
-    } else {
-        console.log('⏳ Esperando QR...');
-    }
 
-    if (connection === 'close') {
-        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-        console.log('❌ Conexión cerrada, reconectando...');
-        if (shouldReconnect) {
-            connectToWhatsApp();
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Conexión cerrada, reconectando...');
+            if (shouldReconnect) {
+                connectToWhatsApp();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Conectado a WhatsApp!');
         }
-    } else if (connection === 'open') {
-        console.log('✅ Conectado a WhatsApp!');
-    }
-});
-
-
-    
+    });
 
     sock.ev.on('creds.update', saveCreds);
 
