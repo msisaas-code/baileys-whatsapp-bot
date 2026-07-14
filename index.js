@@ -2,11 +2,11 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const QRCode = require('qrcode');
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
 
-// ⚠️ CAMBIÁ ESTA URL POR LA DE TU WEBHOOK PHP
 const WEBHOOK_URL = 'https://ruralsoft.itsolution.com.ar/webhooks/index.php';
 
 let sock = null;
@@ -21,21 +21,36 @@ async function connectToWhatsApp() {
 
     // ============================================================
     //  FALLBACK: CÓDIGO DE EMPAREJAMIENTO (8 dígitos)
-    //  Se usa cuando no hay QR o no se puede escanear.
+    //  Se ejecuta después de 5 segundos para dar tiempo a Baileys
     // ============================================================
-    if (!state.creds) {
-        console.log('📱 No hay sesión guardada. Solicitando código de emparejamiento...');
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode('5493718578911'); // Número sin +
-                console.log('📱 Código de emparejamiento (8 dígitos):');
-                console.log(code);
-                console.log('📱 Usalo en WhatsApp → Dispositivos vinculados → Vincular con número de teléfono');
-            } catch (err) {
-                console.error('Error obteniendo código de emparejamiento:', err);
+    console.log('📱 Esperando 5 segundos antes de solicitar código de emparejamiento...');
+    setTimeout(async () => {
+        try {
+            console.log('📱 Solicitando código de emparejamiento para el número: 5493718578911');
+            const code = await sock.requestPairingCode('5493718578911');
+            console.log('✅ CÓDIGO DE EMPAREJAMIENTO (8 dígitos):');
+            console.log('🔢 =====>', code, '<=====');
+            console.log('📱 Usá este código en WhatsApp → Dispositivos vinculados → Vincular con número de teléfono');
+        } catch (err) {
+            console.error('❌ Error obteniendo código de emparejamiento:', err.message);
+            console.log('📱 Si falla, generando QR como respaldo...');
+            // Si falla, mostramos el QR en texto plano
+            const qr = await sock.requestQR();
+            if (qr) {
+                console.log('📱 QR EN TEXTO PLANO (copiar y usar en generador online):');
+                console.log(qr);
+                QRCode.toString(qr, { type: 'terminal' }, (err, qrString) => {
+                    if (err) console.error('Error generando QR:', err);
+                    else console.log(qrString);
+                });
+                // Guardar QR como archivo de imagen
+                QRCode.toFile('qr.png', qr, (err) => {
+                    if (err) console.error('Error guardando QR:', err);
+                    else console.log('📱 QR guardado como qr.png. Descargalo desde Railway.');
+                });
             }
-        }, 3000); // Espera 3 segundos para que Baileys esté listo
-    }
+        }
+    }, 5000);
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -53,6 +68,11 @@ async function connectToWhatsApp() {
             } catch (err) {
                 console.error('Error generando QR:', err);
             }
+            // Guardar QR como archivo de imagen
+            QRCode.toFile('qr.png', qr, (err) => {
+                if (err) console.error('Error guardando QR:', err);
+                else console.log('📱 QR guardado como qr.png. Descargalo desde Railway.');
+            });
             console.log('\n');
         } else {
             console.log('⏳ Esperando QR...');
@@ -109,6 +129,24 @@ connectToWhatsApp();
 
 app.get('/ping', (req, res) => {
     res.json({ status: 'ok', message: 'Baileys server running' });
+});
+
+app.get('/qr', async (req, res) => {
+    try {
+        const qr = await sock.requestQR();
+        res.send(`
+            <html>
+                <head><title>QR Code</title></head>
+                <body>
+                    <h1>Escanea este QR con WhatsApp</h1>
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
+                    <p>O usa el código de emparejamiento en los logs.</p>
+                </body>
+            </html>
+        `);
+    } catch (err) {
+        res.status(500).send('Error generando QR: ' + err.message);
+    }
 });
 
 const PORT = process.env.PORT || 3000;
