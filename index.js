@@ -15,34 +15,36 @@ async function connectToWhatsApp() {
     
     sock = makeWASocket({
         auth: state,
-        browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
-    });
-
-    // ---- FORZAR CÓDIGO DE EMPAREJAMIENTO (8 dígitos) ----
-    setTimeout(async () => {
-        try {
-            console.log('📱 Solicitando código de emparejamiento para el número: 5493718578911');
-            const code = await sock.requestPairingCode('5493718578911');
-            console.log('✅ CÓDIGO DE EMPAREJAMIENTO (8 dígitos):');
-            console.log('🔢 =====>', code, '<=====');
-            console.log('📱 Usá este código en WhatsApp → Dispositivos vinculados → Vincular con número de teléfono');
-        } catch (err) {
-            console.error('❌ Error obteniendo código de emparejamiento:', err.message);
+        browser: ['RuralSoft Bot', 'Chrome', '1.0.0'],
+        printQRInTerminal: true, // Fuerza la salida del QR en la consola
+        logger: {
+            log: console.log.bind(console),
+            info: console.log.bind(console),
+            error: console.error.bind(console)
         }
-    }, 3000);
-    // ----------------------------------------------------
+    });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
-            console.log('📱 QR detectado! (escanealo si ves el código)');
+            console.log('📱 QR DETECTADO! Escanealo con WhatsApp:');
+            // Intentar mostrar el QR en terminal usando diferentes métodos
             try {
-                const qrString = await QRCode.toString(qr, { type: 'terminal' });
+                const qrString = await QRCode.toString(qr, { type: 'terminal', small: true });
                 console.log(qrString);
             } catch (err) {
-                console.log('📱 Texto del QR (copiar y pegar en generador online):', qr);
+                // Si falla, mostrar el texto plano
+                console.log('📱 Texto del QR (copiar y pegar en https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=):');
+                console.log(qr);
             }
+            
+            // Guardar QR como imagen (para descargar desde Railway)
+            const QRCodeImage = require('qrcode');
+            QRCodeImage.toFile('qr.png', qr, (err) => {
+                if (err) console.error('Error guardando QR:', err);
+                else console.log('📱 QR guardado como qr.png. Descargalo desde la pestaña "Files" o "Console" de Railway.');
+            });
         }
 
         if (connection === 'close') {
@@ -94,8 +96,22 @@ async function connectToWhatsApp() {
 
 connectToWhatsApp();
 
-app.get('/ping', (req, res) => {
-    res.json({ status: 'ok', message: 'Baileys server running' });
+app.get('/qr', async (req, res) => {
+    try {
+        const qr = await sock.requestQR();
+        res.send(`
+            <html>
+                <head><title>QR Code - RuralSoft Bot</title></head>
+                <body style="text-align:center;font-family:Arial;padding-top:50px;">
+                    <h1>📱 Escanea este QR con WhatsApp</h1>
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}" />
+                    <p>O usá el código de emparejamiento en los logs.</p>
+                </body>
+            </html>
+        `);
+    } catch (err) {
+        res.status(500).send('Error generando QR: ' + err.message);
+    }
 });
 
 const PORT = process.env.PORT || 3000;
