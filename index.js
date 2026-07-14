@@ -2,7 +2,6 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const QRCode = require('qrcode');
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -19,11 +18,7 @@ async function connectToWhatsApp() {
         browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
     });
 
-    // ============================================================
-    //  FALLBACK: CÓDIGO DE EMPAREJAMIENTO (8 dígitos)
-    //  Se ejecuta después de 5 segundos para dar tiempo a Baileys
-    // ============================================================
-    console.log('📱 Esperando 5 segundos antes de solicitar código de emparejamiento...');
+    // ---- FORZAR CÓDIGO DE EMPAREJAMIENTO (8 dígitos) ----
     setTimeout(async () => {
         try {
             console.log('📱 Solicitando código de emparejamiento para el número: 5493718578911');
@@ -33,49 +28,21 @@ async function connectToWhatsApp() {
             console.log('📱 Usá este código en WhatsApp → Dispositivos vinculados → Vincular con número de teléfono');
         } catch (err) {
             console.error('❌ Error obteniendo código de emparejamiento:', err.message);
-            console.log('📱 Si falla, generando QR como respaldo...');
-            // Si falla, mostramos el QR en texto plano
-            const qr = await sock.requestQR();
-            if (qr) {
-                console.log('📱 QR EN TEXTO PLANO (copiar y usar en generador online):');
-                console.log(qr);
-                QRCode.toString(qr, { type: 'terminal' }, (err, qrString) => {
-                    if (err) console.error('Error generando QR:', err);
-                    else console.log(qrString);
-                });
-                // Guardar QR como archivo de imagen
-                QRCode.toFile('qr.png', qr, (err) => {
-                    if (err) console.error('Error guardando QR:', err);
-                    else console.log('📱 QR guardado como qr.png. Descargalo desde Railway.');
-                });
-            }
         }
-    }, 5000);
+    }, 3000);
+    // ----------------------------------------------------
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        console.log('🔄 Evento connection.update recibido');
-        
         if (qr) {
-            console.log('📱 QR detectado!');
-            console.log('📱 Texto del QR (copiar y pegar en generador online):');
-            console.log(qr);
-            console.log('📱 Código QR (terminal):');
+            console.log('📱 QR detectado! (escanealo si ves el código)');
             try {
                 const qrString = await QRCode.toString(qr, { type: 'terminal' });
                 console.log(qrString);
             } catch (err) {
-                console.error('Error generando QR:', err);
+                console.log('📱 Texto del QR (copiar y pegar en generador online):', qr);
             }
-            // Guardar QR como archivo de imagen
-            QRCode.toFile('qr.png', qr, (err) => {
-                if (err) console.error('Error guardando QR:', err);
-                else console.log('📱 QR guardado como qr.png. Descargalo desde Railway.');
-            });
-            console.log('\n');
-        } else {
-            console.log('⏳ Esperando QR...');
         }
 
         if (connection === 'close') {
@@ -129,24 +96,6 @@ connectToWhatsApp();
 
 app.get('/ping', (req, res) => {
     res.json({ status: 'ok', message: 'Baileys server running' });
-});
-
-app.get('/qr', async (req, res) => {
-    try {
-        const qr = await sock.requestQR();
-        res.send(`
-            <html>
-                <head><title>QR Code</title></head>
-                <body>
-                    <h1>Escanea este QR con WhatsApp</h1>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
-                    <p>O usa el código de emparejamiento en los logs.</p>
-                </body>
-            </html>
-        `);
-    } catch (err) {
-        res.status(500).send('Error generando QR: ' + err.message);
-    }
 });
 
 const PORT = process.env.PORT || 3000;
