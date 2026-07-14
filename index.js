@@ -15,7 +15,7 @@ async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     sock = makeWASocket({
-        printQRInTerminal: false,
+        printQRInTerminal: true,
         auth: state,
         browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
     });
