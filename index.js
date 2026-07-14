@@ -19,18 +19,29 @@ async function connectToWhatsApp() {
         browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
     });
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-      if (qr) {
-    console.log('📱 QR en texto (copiar y usar en generador online):');
-    console.log(qr);
-    console.log('📱 Código QR (escaneable):');
-    QRCode.generate(qr, { small: true });
-    console.log('\n');
-}
+    sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    
+    // Siempre mostrar algo para saber que el evento se ejecuta
+    console.log('🔄 Evento connection.update recibido');
+    
+    if (qr) {
+        console.log('📱 QR detectado!');
+        console.log('📱 Texto del QR (copiar y pegar en generador online):');
+        console.log(qr);
+        console.log('📱 Código QR (terminal):');
+        try {
+            const qrString = await QRCode.toString(qr, { type: 'terminal' });
+            console.log(qrString);
+        } catch (err) {
+            console.error('Error generando QR:', err);
+        }
+        console.log('\n');
+    } else {
+        console.log('⏳ Esperando QR...');
+    }
 
-        if (connection === 'close') {
+    if (connection === 'close') {
         const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
         console.log('❌ Conexión cerrada, reconectando...');
         if (shouldReconnect) {
@@ -39,7 +50,10 @@ async function connectToWhatsApp() {
     } else if (connection === 'open') {
         console.log('✅ Conectado a WhatsApp!');
     }
-    });
+});
+
+
+    
 
     sock.ev.on('creds.update', saveCreds);
 
