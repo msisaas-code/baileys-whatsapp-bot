@@ -1,0 +1,15 @@
+{
+  "name": "baileys-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot con Baileys para RuralSoft",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "qrcode-terminal": "^0.12.0",
+    "express": "^4.18.2",
+    "axios": "^1.6.0"
+  }
+}
