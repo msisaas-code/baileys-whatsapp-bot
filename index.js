@@ -9,38 +9,29 @@ app.use(express.json());
 const WEBHOOK_URL = 'https://ruralsoft.itsolution.com.ar/webhooks/index.php';
 
 let sock = null;
+let lastQR = null; // Guarda el último QR generado
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
     sock = makeWASocket({
         auth: state,
-        browser: ['RuralSoft Bot', 'Chrome', '1.0.0'],
-        logger: {
-            log: console.log.bind(console),
-            info: console.log.bind(console),
-            error: console.error.bind(console)
-        }
+        browser: ['RuralSoft Bot', 'Chrome', '1.0.0']
     });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
-            console.log('📱 QR DETECTADO! Escanealo con WhatsApp:');
-            // Mostrar el QR en terminal
+            lastQR = qr; // Guardamos el QR para mostrarlo en la ruta /qr
+            console.log('📱 QR detectado! Escanealo en: /qr');
+            // También lo mostramos en terminal por si acaso
             try {
                 const qrString = await QRCode.toString(qr, { type: 'terminal' });
                 console.log(qrString);
             } catch (err) {
-                console.log('📱 Texto del QR (copiar y pegar en generador online):');
-                console.log(qr);
+                console.log('📱 Texto del QR:', qr);
             }
-            // Guardar QR como archivo de imagen
-            QRCode.toFile('qr.png', qr, (err) => {
-                if (err) console.error('Error guardando QR:', err);
-                else console.log('📱 QR guardado como qr.png. Descargalo desde la pestaña "Files" de Railway.');
-            });
         }
 
         if (connection === 'close') {
@@ -51,6 +42,7 @@ async function connectToWhatsApp() {
             }
         } else if (connection === 'open') {
             console.log('✅ Conectado a WhatsApp!');
+            lastQR = null; // Ya no necesitamos el QR
         }
     });
 
@@ -92,22 +84,37 @@ async function connectToWhatsApp() {
 
 connectToWhatsApp();
 
-app.get('/qr', async (req, res) => {
-    try {
-        // Generar QR manualmente
-        const qr = await sock.requestQR();
+// Ruta para verificar que el servidor está vivo
+app.get('/ping', (req, res) => {
+    res.json({ status: 'ok', message: 'Baileys server running' });
+});
+
+// Ruta para mostrar el QR en el navegador
+app.get('/qr', (req, res) => {
+    if (lastQR) {
+        const qrData = encodeURIComponent(lastQR);
         res.send(`
             <html>
                 <head><title>QR Code - RuralSoft Bot</title></head>
                 <body style="text-align:center;font-family:Arial;padding-top:50px;">
                     <h1>📱 Escanea este QR con WhatsApp</h1>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}" />
-                    <p>O usá el código de emparejamiento en los logs.</p>
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${qrData}" />
+                    <p>Escanea con WhatsApp → Dispositivos vinculados → Vincular un dispositivo</p>
+                    <p><small>El QR es válido por 2 minutos. Recarga esta página si expiró.</small></p>
                 </body>
             </html>
         `);
-    } catch (err) {
-        res.status(500).send('Error generando QR: ' + err.message);
+    } else {
+        res.status(404).send(`
+            <html>
+                <head><title>QR no disponible</title></head>
+                <body style="text-align:center;font-family:Arial;padding-top:50px;">
+                    <h1>⏳ Esperando QR...</h1>
+                    <p>Aún no se ha generado un QR. Reinicia el servicio si esto persiste.</p>
+                    <p><a href="/qr">Recargar</a></p>
+                </body>
+            </html>
+        `);
     }
 });
 
